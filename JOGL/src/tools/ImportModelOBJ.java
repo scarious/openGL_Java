@@ -20,6 +20,7 @@ public class ImportModelOBJ implements ImportModel {
 	InputStreamReader inputStreamReader;
 	BufferedReader bufferedReader;
 	File fileModel;
+	float centerX, centerY, centerZ; //stred objektu (napr. kvoli otacaniu)
 	
 	private enum ObjType {
 		VVT, VVTVN
@@ -151,7 +152,8 @@ public class ImportModelOBJ implements ImportModel {
 			System.out.println("Faces pattern: f v1 v2 v3 v4 ...");
 			System.out.println("NOT IMPLEMENTED!");
 		}
-		System.out.println("Import Done Can draw");
+		System.out.println("Import Done!");
+		getOptimalDepth();
 	}
 	
 	private void analyzeFacesforVVTVN(){
@@ -279,7 +281,7 @@ System.out.println("Analyzing faces data...");
 	public void drawModel(GL2 gl){
 		
 		float[] f = new float[3];
-		
+		gl.glTranslatef(-centerX, -centerY, -centerZ);
 		switch(typeOfObject){
 			case VVT:
 				gl.glBegin( GL2.GL_TRIANGLES ); // štvorec
@@ -425,10 +427,10 @@ System.out.println("Analyzing faces data...");
 			maxY = xyz2;
 			maxZ = xyz3;
 		} 
-		if(maxX == -1 && maxY == -1 && maxZ == -1){
-			maxX = xyz;
-			maxY = xyz2;
-			maxZ = xyz3;
+		if(minX == -1 && minY == -1 && minZ == -1){
+			minX = xyz;
+			minY = xyz2;
+			minZ = xyz3;
 		} 
 		
 		tempX = xyz;
@@ -450,6 +452,34 @@ System.out.println("Analyzing faces data...");
 		} else if(minZ > tempZ) {
 			minZ = tempZ;
 		}
+	}
+	
+	public float getOptimalDepth(){
+		float optimal = 100.0f;
+		final double tan45 = 1.61977519;
+		float xlenght = minX + maxX;
+		float ylenght = minY + maxY;
+		float zlenght = minZ + maxZ;
+		centerX = xlenght/2;
+		centerY = ylenght/2;
+		centerZ = zlenght/2;
+		float temp = 1; //maximalna hodnota
+		
+		if(xlenght >= ylenght && xlenght >= zlenght) {
+			temp = xlenght;
+			optimal = ((float) Math.tan(60) / (temp/2)) + zlenght;
+		} else if(ylenght >= xlenght && ylenght >= zlenght){
+			temp = ylenght;
+			optimal = ((float) Math.tan(67.5) / (temp/2));
+		} else if(zlenght >= ylenght && zlenght >= xlenght){
+			temp = zlenght;
+			optimal = ((float) Math.tan(60) / (temp/2)) + temp;
+		}
+		
+		
+		System.out.println("Max vzdialenosti podla osi(x,y,z): " + xlenght + " " + ylenght + " " + zlenght + " naj z nich: " + temp + " vypoc. optimalna hlbka: " + optimal);
+		return -optimal;
+		
 	}
 
 	//KONIEC TRIEDY

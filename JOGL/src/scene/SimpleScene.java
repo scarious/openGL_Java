@@ -38,7 +38,6 @@ public class SimpleScene {
 	float angleX = 0.0f, angleY = 10.0f, angleZ = 0.0f;
 	float depth = -100; //initial depth of loaded object into screen
 	float angleIncrease = 1.0f; //"speed" of rotation around Y-axis
-
 	static ImportModel model = null;
 	int textBuff[] = new int[10];
 	TextureReader.Texture texture[] = new TextureReader.Texture[10];
@@ -49,7 +48,8 @@ public class SimpleScene {
 		if(file.endsWith(".3ds")){
 			model = new ImportModel3DS(file);		
 		} else if(file.endsWith(".obj")){
-			model = new ImportModelOBJ(file);		
+			model = new ImportModelOBJ(file);
+			depth = ((ImportModelOBJ)model).getOptimalDepth();
 		} else {
 			System.out.println("Chyba!");
 		}
@@ -153,8 +153,8 @@ public class SimpleScene {
 		    gl.glHint(GL2.GL_PERSPECTIVE_CORRECTION_HINT, GL.GL_NICEST);//korekcia perspektivy
 		    
 		    //SVETLO
-		    gl.glEnable(GL2.GL_LIGHT0);
-		    gl.glEnable(GL2.GL_LIGHTING);
+		   // gl.glEnable(GL2.GL_LIGHT0);
+		    //gl.glEnable(GL2.GL_LIGHTING);
 			//TEXTURY
 		    gl.glEnable(GL.GL_TEXTURE_2D); //povolenie texture mappingu
 	        try {
@@ -189,7 +189,6 @@ public class SimpleScene {
 		
 		@Override
 		public void display(GLAutoDrawable drawable) {
-			//System.out.println("nextdraw");
 			GL2 gl = drawable.getGL().getGL2();
 			gl.glClear(GL.GL_COLOR_BUFFER_BIT | GL.GL_DEPTH_BUFFER_BIT);//vycistenie obrazovky aj depth buffera
 			gl.glEnable(GL.GL_TEXTURE_2D); //musi to tu byt ked chcem textury
@@ -211,13 +210,17 @@ public class SimpleScene {
 	        gl.glEnd(); */
 	        
 			gl.glLoadIdentity(); //obsah sceny
-			gl.glTranslatef(0.0f, 0.0f, depth);
-			gl.glRotatef(angleX, 1.0f, 0.0f, 0.0f);
+			
+			gl.glTranslatef(0.0f, 0.0f, -200.0f);
 			gl.glRotatef(angleY, 0.0f, 1.0f, 0.0f);
-			gl.glRotatef(angleZ, 0.0f, 1.0f, 0.0f);
+			
+			
+			
+			model.drawModel(gl);
+			
 			
 		    angleY = angleY + angleIncrease;
-		    model.drawModel(gl);
+		    
 		    
 		    gl.glDisable(GL.GL_TEXTURE_2D);
 		    gl.glLoadIdentity();
@@ -244,7 +247,7 @@ public class SimpleScene {
 
 			final float h = (float)width / (float)height;
 			//45-uhol do hlbky od osi x,y
-			//h - pomer stran; 0.1, 1000.0 interval pre hlbku
+			//h - pomer stran; 0.1, 800.0 interval pre hlbku
 			glu.gluPerspective(45.0f, h, 0.1, 800.0);
 
 			gl.glMatrixMode(GL2.GL_MODELVIEW);
