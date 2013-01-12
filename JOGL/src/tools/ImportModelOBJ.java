@@ -127,6 +127,8 @@ public class ImportModelOBJ implements ImportModel {
 		System.out.println("Normals vertex (vn) data count: " + vnDataSize);
 		System.out.println("-------- IMPORT FINISHED --------");
 		System.out.println("Max X: " + maxX + " Max Y: " + maxY + " Max Z: " + maxZ);
+		System.out.println("Min X: " + minX + " Min Y: " + minY + " Min Z: " + minZ);
+		
 		calculateFinalData();
 	}
 	
@@ -416,7 +418,7 @@ System.out.println("Analyzing faces data...");
 	private void setMaxMinXYZ(float xyz, float xyz2, float xyz3){
 		//temp? - pre max hodnoty
 		//temp2? - pre min hodnoty
-		float tempX, tempY, tempZ, temp2X, temp2Y, temp2Z;
+		float tempX, tempY, tempZ;//, temp2X, temp2Y, temp2Z;
 		//prepisanie default hotnot
 		if(maxX == -1 && maxY == -1 && maxZ == -1){
 			maxX = xyz;
@@ -435,18 +437,18 @@ System.out.println("Analyzing faces data...");
 		//porovnavanie
 		if(maxX <= tempX){
 			maxX = tempX;
-		} else {
-			
+		} else if(minX > tempX) {
+			minX = tempX;
 		}
 		if(maxY <= tempY){
 			maxY = tempY;
-		} else {
-			
+		} else if(minY > tempY) {
+			minY = tempY;
 		}
 		if(maxZ <= tempZ){
 			maxZ = tempZ;
-		} else {
-			
+		} else if(minZ > tempZ) {
+			minZ = tempZ;
 		}
 	}
 
