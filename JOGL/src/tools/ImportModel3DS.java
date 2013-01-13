@@ -11,8 +11,12 @@ import mri.v3ds.*;
 public class ImportModel3DS implements ImportModel{
 	static final boolean FLIPV = true;
 	static final boolean FLIPYZ = false;
-	  
 
+	//
+	float maxX = -1, maxY = -1, maxZ = -1;
+	float minX = -1, minY = -1, minZ = -1;
+
+	//
 	Scene3ds _scene;  // from mri lib
 	ArrayList<Material> _materials;
 	ArrayList<?> _textures;
@@ -121,15 +125,19 @@ public class ImportModel3DS implements ImportModel{
 	      _materials.add(mmat);
 	    }
 	    
-	   
+	   centerObject();
+	   getOptimalDepth();
   }
 	
 @Override
 public void drawModel(GL2 gl){
+	//centrovanie
+	gl.glTranslatef(-centerX, -centerY, -centerZ);
+	//^^centrovanie
 	for( int mi=0; mi<_scene.meshes(); mi++ )
     {
       Mesh3ds m = _scene.mesh( mi );
-
+      
   
       //XTexture tex;
       Material mat;
@@ -171,8 +179,13 @@ public void drawModel(GL2 gl){
         Vector3 uv0 = new Vector3();
         Vector3 uv1 = new Vector3();
         Vector3 uv2 = new Vector3();
-    
+        
+       
+        
+        
+        
         gl.glBegin( GL2.GL_TRIANGLES );
+        
         for( int fi=0; fi<fmat.faces(); fi++ )
         {
           int idx = fmat.face( fi );
@@ -212,6 +225,120 @@ public void drawModel(GL2 gl){
 
 }
 
+//_______________________________________
+//doplnena funkcia na centrovanie objektu
+//---------------------------------------
+private void centerObject(){
+	 // *TEST*
+    //jednoduche centrovanie objektu prerobene z OBJ importu
+    
+	for( int mi=0; mi<_scene.meshes(); mi++ )
+    {
+      Mesh3ds m = _scene.mesh( mi );
+      
+  
+      //XTexture tex;
+      Material mat;
+      FaceMat3ds fmat;
+      FloatBuffer fb;
+      
+      for( int fm=0; fm<m.faceMats(); fm++ )
+      {
+        //Face3ds[] faces = m.faceArray();    // list of all faces in mesh
+        fmat = m.faceMat( fm );  // get current material's face
+	    		try {
+		    		mat = (Material)_materials.get( fmat.material() );
+	    			//mat = (Material)_materials.get( fmat.material()+1 );
+	    		} catch( IndexOutOfBoundsException e )
+	    		{
+	    			mat = null;
+	    		}
+      	for( int fi=0; fi<fmat.faces(); fi++ ){
+      		int idx = fmat.face( fi );
+      		Face3ds f = m.face( idx );
+      		Vector3 v0 = _meshes[mi].vertices[f.P0];
+      		Vector3 v1 = _meshes[mi].vertices[f.P1];
+      		Vector3 v2 = _meshes[mi].vertices[f.P2];
+      		setMaxMinXYZ(v0.x, v0.y, v0.z);
+      		setMaxMinXYZ(v1.x, v1.y, v1.z);
+      		setMaxMinXYZ(v2.x, v2.y, v2.z);
+      	}
+      }
+    }
+    //
+}
+
+private void setMaxMinXYZ(float xyz, float xyz2, float xyz3){
+	
+	float tempX, tempY, tempZ;//, temp2X, temp2Y, temp2Z;
+	//prepisanie default hotnot
+	if(maxX == -1 && maxY == -1 && maxZ == -1){
+		maxX = xyz;
+		maxY = xyz2;
+		maxZ = xyz3;
+	} 
+	if(minX == -1 && minY == -1 && minZ == -1){
+		minX = xyz;
+		minY = xyz2;
+		minZ = xyz3;
+	} 
+	
+	tempX = xyz;
+	tempY = xyz2;
+	tempZ = xyz3;
+	//porovnavanie
+	if(maxX <= tempX){
+		maxX = tempX;
+	} else if(minX > tempX) {
+		minX = tempX;
+	}
+	if(maxY <= tempY){
+		maxY = tempY;
+	} else if(minY > tempY) {
+		minY = tempY;
+	}
+	if(maxZ <= tempZ){
+		maxZ = tempZ;
+	} else if(minZ > tempZ) {
+		minZ = tempZ;
+	}
+	
+}
+
+float centerX, centerY, centerZ; //stred objektu (napr. kvoli otacaniu)
+
+public float getOptimalDepth(){
+	final double tan45 = 1.61977519;
+	float optimal = 100.0f;
+	float xlenght = minX + maxX;
+	float ylenght = minY + maxY;
+	float zlenght = minZ + maxZ;
+	centerX = xlenght/2;
+	centerY = ylenght/2;
+	centerZ = zlenght/2;
+	float temp = 1; //maximalna hodnota
+	
+	xlenght = Math.abs(maxX - minX);
+	ylenght = Math.abs( maxY - minY);
+	zlenght = Math.abs(maxZ - minZ );
+	
+	if(xlenght >= ylenght && xlenght >= zlenght) {
+		temp = xlenght;
+		optimal = ((float)tan45 * (temp));
+	} else if(ylenght >= xlenght && ylenght >= zlenght){
+		temp = ylenght;
+		optimal = ((float)tan45 * (temp));
+	} else if(zlenght >= ylenght && zlenght >= xlenght){
+		temp = zlenght;
+		optimal = ((float)tan45 * (temp)) + Math.abs(centerX);
+	}
+	
+	
+	System.out.println("Max vzdialenosti podla osi(x,y,z): " + xlenght + " " + ylenght + " " + zlenght + " naj z nich: " + temp + " vypoc. optimalna hlbka: " + optimal);
+	
+	return optimal;
+}
+//koniec centrovania
 
 	private void init() {
 		 _meshes = new Mesh[ _scene.meshes() ];

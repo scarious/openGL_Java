@@ -23,7 +23,7 @@ public class ImportModelOBJ implements ImportModel {
 	float centerX, centerY, centerZ; //stred objektu (napr. kvoli otacaniu)
 	
 	private enum ObjType {
-		VVT, VVTVN
+		VVT, VVTVN  //VVT - vrcholy + textury; VVTVN - vrcholy + textury + normaly
 	}
 	
 	ObjType typeOfObject = null;
@@ -42,7 +42,7 @@ public class ImportModelOBJ implements ImportModel {
 	ArrayList<float[]> finalQuadsData = new ArrayList<float[]>();
 	ArrayList<float[]> faceTextureList =new ArrayList<float[]>();
 	
-	int vDataSize, vtDataSize, vnDataSize;
+	int vDataSize, vtDataSize, vnDataSize; //premenne na uchovanie velkosti jednotlivych zoznamov, sluzi len pre vypis
 	float maxX = -1, maxY = -1, maxZ = -1;
 	float minX = -1, minY = -1, minZ = -1;
 	public ImportModelOBJ(String location) {
@@ -62,7 +62,7 @@ public class ImportModelOBJ implements ImportModel {
 	
 	public void readModelData(){
 		String line = "";
-		float[] xyz = new float[4];
+		float[] xyz = new float[3];
 		while(line != null){
 			try {
 				line = bufferedReader.readLine();
@@ -74,14 +74,14 @@ public class ImportModelOBJ implements ImportModel {
 					xyz[0] = Float.valueOf(tempTokenizer.nextToken());
 					xyz[1] = Float.valueOf(tempTokenizer.nextToken());
 					xyz[2] = Float.valueOf(tempTokenizer.nextToken());
-					if(tempTokenizer.hasMoreTokens()){
+					/*if(tempTokenizer.hasMoreTokens()){
 						xyz[3] = Float.valueOf(tempTokenizer.nextToken());
 					} else {
 						xyz[3] = 1.0f;
-					}
+					}*/
 					setMaxMinXYZ(xyz[0], xyz[1], xyz[2]);
 					vData.add(xyz);
-					xyz = new float[4];
+					xyz = new float[3];
 				} else if(line.startsWith("vt ")){
 					StringTokenizer tempTokenizer = new StringTokenizer(line);
 					tempTokenizer.nextToken();
@@ -90,21 +90,21 @@ public class ImportModelOBJ implements ImportModel {
 					xyz[2] = 0.0f;
 					
 					vtData.add(xyz);
-					xyz = new float[4];
+					xyz = new float[3];
 				} else if(line.startsWith("vn ")){
 					StringTokenizer tempTokenizer = new StringTokenizer(line);
 					tempTokenizer.nextToken();
 					xyz[0] = Float.valueOf(tempTokenizer.nextToken());
 					xyz[1] = Float.valueOf(tempTokenizer.nextToken());
 					xyz[2] = Float.valueOf(tempTokenizer.nextToken());
-					if(tempTokenizer.hasMoreTokens()){
+					/*if(tempTokenizer.hasMoreTokens()){
 						xyz[3] = Float.valueOf(tempTokenizer.nextToken());
 					} else {
 						xyz[3] = 1.0f;
-					}
+					}*/
 					
 					vnData.add(xyz);
-					xyz = new float[4];
+					xyz = new float[3];
 				} else if(line.startsWith("f ")){
 					fDataRAW.add(line);
 				}
@@ -139,6 +139,7 @@ public class ImportModelOBJ implements ImportModel {
 			typeOfObject = ObjType.VVTVN;
 			analyzeFacesforVVTVN();
 			assemblyFinalTrianglesDataWithNormals();
+			assemblyFinalQuadsDataWithNormals();
 		} else if(vDataSize > 0 && vnDataSize == 0 && vtDataSize >0){		//analyze faces data with pattern f v1/vt1 v2/vt2 v3/vt3 ...
 			System.out.println("Faces pattern: f v1/vt1 v2/vt2 v3/vt3 ...");
 			typeOfObject = ObjType.VVT;
@@ -158,19 +159,18 @@ public class ImportModelOBJ implements ImportModel {
 	
 	private void analyzeFacesforVVTVN(){
 System.out.println("Analyzing faces data...");
-		
 		float[] xyT = new float[4];
 		float[] xyz = new float[4];
 		float[] xyzN = new float[4];
 		int riadok = 0;
 		for(String line: fDataRAW){ //prechadzam riadok po riadku data pre faces zo obj suboru
 			//System.out.println(riadok + ": " + line);
-			if(line.contains("//")){return;};
+			//if(line.contains("//")){System.out.println(riadok + ": " + line);};
 			StringTokenizer tempTokenizer = new StringTokenizer(line);
 			String word = null;
 			tempTokenizer.nextToken();
 			int numberOfTokens = tempTokenizer.countTokens();
-			if(numberOfTokens == 3){
+			if(numberOfTokens == 3 && !line.contains("//")){
 					word = tempTokenizer.nextToken(); // V1/VT1
 					xyz[0] = Float.valueOf(word.substring(0, word.indexOf("/")));
 					xyT[0] = Float.valueOf(word.substring(word.indexOf("/")+1, word.lastIndexOf("/")));
@@ -189,7 +189,7 @@ System.out.println("Analyzing faces data...");
 					triangleFacesList.add(xyT);
 					triangleFacesList.add(xyzN);
 					triangleFacesList.add(xyz);	
-			} else if(numberOfTokens == 4){
+			} else if(numberOfTokens == 4 && !line.contains("//")){
 					word = tempTokenizer.nextToken(); // V1/VT1
 					xyz[0] = Float.valueOf(word.substring(0, word.indexOf("/")));
 					xyT[0] = Float.valueOf(word.substring(word.indexOf("/")+1, word.lastIndexOf("/")));
@@ -326,7 +326,7 @@ System.out.println("Analyzing faces data...");
 			    	  gl.glTexCoord2f(f[0], f[1]);
 			    	  ++i;
 			    	  f = new float[3];
-			    	  f = finalTrianglesData.get(i);
+			    	  f = finalQuadsData.get(i);
 			    	  gl.glNormal3f(f[0], f[1], f[2]);
 			    	  ++i;
 			    	  f = new float[3];
@@ -361,6 +361,34 @@ System.out.println("Analyzing faces data...");
 			tempVT = new float[3];
 			tempVN  = new float[3];
 			tempV = new float[3];
+		}
+	}
+	
+	private void assemblyFinalQuadsDataWithNormals(){
+		float[] tempV  = new float[4];
+		float[] tempVT  = new float[4];
+		float[] tempVN  = new float[4];
+		
+		for(int i = 0; i < quadsFacesList.size(); i++){
+			tempVT = quadsFacesList.get(i);
+			tempVN = quadsFacesList.get(++i);
+			tempV = quadsFacesList.get(++i);
+			finalQuadsData.add(vtData.get((int) (tempVT[0]-1.0)));
+			finalQuadsData.add(vnData.get((int) (tempVN[0]-1.0)));
+			finalQuadsData.add(vData.get((int) (tempV[0]-1.0)));
+			finalQuadsData.add(vtData.get((int) (tempVT[1]-1.0)));
+			finalQuadsData.add(vnData.get((int) (tempVN[1]-1.0)));
+			finalQuadsData.add(vData.get((int) (tempV[1]-1.0)));
+			finalQuadsData.add(vtData.get((int) (tempVT[2]-1.0)));
+			finalQuadsData.add(vnData.get((int) (tempVN[2]-1.0)));
+			finalQuadsData.add(vData.get((int) (tempV[2]-1.0)));
+			finalQuadsData.add(vtData.get((int) (tempVT[3]-1.0)));
+			finalQuadsData.add(vnData.get((int) (tempVN[3]-1.0)));
+			finalQuadsData.add(vData.get((int) (tempV[3]-1.0)));
+			
+			tempVT = new float[4];
+			tempVN = new float[4];
+			tempV = new float[4];
 		}
 	}
 		
@@ -465,20 +493,24 @@ System.out.println("Analyzing faces data...");
 		centerZ = zlenght/2;
 		float temp = 1; //maximalna hodnota
 		
+		xlenght = Math.abs(maxX - minX);
+		ylenght = Math.abs( maxY - minY);
+		zlenght = Math.abs(maxZ - minZ );
+		
 		if(xlenght >= ylenght && xlenght >= zlenght) {
 			temp = xlenght;
-			optimal = ((float) Math.tan(60) / (temp/2)) + zlenght;
+			optimal = ((float)tan45 * (temp));
 		} else if(ylenght >= xlenght && ylenght >= zlenght){
 			temp = ylenght;
-			optimal = ((float) Math.tan(67.5) / (temp/2));
+			optimal = ((float)tan45 * (temp));
 		} else if(zlenght >= ylenght && zlenght >= xlenght){
 			temp = zlenght;
-			optimal = ((float) Math.tan(60) / (temp/2)) + temp;
+			optimal = ((float)tan45 * (temp)) + Math.abs(centerX);
 		}
 		
 		
 		System.out.println("Max vzdialenosti podla osi(x,y,z): " + xlenght + " " + ylenght + " " + zlenght + " naj z nich: " + temp + " vypoc. optimalna hlbka: " + optimal);
-		return -optimal;
+		return optimal;
 		
 	}
 

@@ -30,13 +30,15 @@ public class SimpleScene {
 	JOGLListener jGLlistener;
 	JFrame frame;
 	FPSAnimator fps;
+	GL2 gl;
 	private GLU glu;
 	private GLUT glut;
 	int x;
 	int y;
 	
+	boolean light = false;
 	float angleX = 0.0f, angleY = 10.0f, angleZ = 0.0f;
-	float depth = -100; //initial depth of loaded object into screen
+	float depth = -200f; //initial depth of loaded object into screen
 	float angleIncrease = 1.0f; //"speed" of rotation around Y-axis
 	static ImportModel model = null;
 	int textBuff[] = new int[10];
@@ -46,10 +48,12 @@ public class SimpleScene {
 	String file = "";
 	public SimpleScene(String file){
 		if(file.endsWith(".3ds")){
-			model = new ImportModel3DS(file);		
+			model = new ImportModel3DS(file);	
+			depth = -((ImportModel3DS)model).getOptimalDepth();
+			
 		} else if(file.endsWith(".obj")){
 			model = new ImportModelOBJ(file);
-			depth = ((ImportModelOBJ)model).getOptimalDepth();
+			depth = -((ImportModelOBJ)model).getOptimalDepth();
 		} else {
 			System.out.println("Chyba!");
 		}
@@ -96,17 +100,7 @@ public class SimpleScene {
 			
 
 	}
-	
-	/*public static void main(String[] args) {
-		model = new ImportModelOBJ("res/ak47.obj");	
-		SwingUtilities.invokeLater(new Runnable() {
-			@Override
-			public void run() {
-				new SimpleScene();
-				
-			}
-		});
-	}*/
+
 	public void start(String path){
 		System.out.println("Program running...");
 		if(path.toLowerCase().endsWith("obj")){
@@ -123,23 +117,18 @@ public class SimpleScene {
 			}
 		}
 		SwingUtilities.invokeLater(new Runnable() {
-			
 			@Override
 			public void run() {
 				new SimpleScene(file);
-				
 			}
 		});
-			
-		
 	}
+
 	private class JOGLListener implements GLEventListener{
-
-
 		@Override
 		public void init(GLAutoDrawable drawable) {
 			//Ziskanie OpenGL kontextu
-			GL2 gl = drawable.getGL().getGL2();
+			gl = drawable.getGL().getGL2();
 			glu = new GLU(); //GLU kniznica
 			glut = new GLUT(); //GLUT kniznica
 			fps.add(drawable);
@@ -166,20 +155,20 @@ public class SimpleScene {
 	        }
 	       
 	        gl.glGenTextures(3, IntBuffer.wrap(textBuff)); //vytvorenie dvoch textur
-	      //  gl.glBindTexture(GL.GL_TEXTURE_2D, textBuff[0]);
-	    //   gl.glTexImage2D(GL.GL_TEXTURE_2D, 0, GL.GL_RGB, texture[0] .getWidth(), 
-	    //		   texture[0].getHeight(), 0, GL.GL_RGB, GL.GL_UNSIGNED_BYTE, texture[0].getPixels());
+	        gl.glBindTexture(GL.GL_TEXTURE_2D, textBuff[0]);
+	       gl.glTexImage2D(GL.GL_TEXTURE_2D, 0, GL.GL_RGB, texture[0] .getWidth(), 
+	    	   texture[0].getHeight(), 0, GL.GL_RGB, GL.GL_UNSIGNED_BYTE, texture[0].getPixels());
       
-	      // gl.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MIN_FILTER, GL.GL_NEAREST);
-	     //  gl.glTexParameteri(GL.GL_TEXTURE_2D,GL.GL_TEXTURE_MAG_FILTER,GL.GL_NEAREST);
+	       gl.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MIN_FILTER, GL.GL_NEAREST);
+	       gl.glTexParameteri(GL.GL_TEXTURE_2D,GL.GL_TEXTURE_MAG_FILTER,GL.GL_NEAREST);
 	       
 	       
-	       gl.glBindTexture(GL.GL_TEXTURE_2D, textBuff[1]);
+	       /*gl.glBindTexture(GL.GL_TEXTURE_2D, textBuff[1]);
 	       gl.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MIN_FILTER, GL.GL_NEAREST);
 	       gl.glTexParameteri(GL.GL_TEXTURE_2D,GL.GL_TEXTURE_MAG_FILTER,GL.GL_LINEAR);
 	       gl.glTexImage2D(GL.GL_TEXTURE_2D, 0, GL.GL_RGB, texture[1].getWidth(), 
 	    		   texture[1].getHeight(), 0, GL.GL_RGB, GL.GL_UNSIGNED_BYTE, texture[1].getPixels());
-	      
+	      */
 		}
 
 		@Override
@@ -189,39 +178,28 @@ public class SimpleScene {
 		
 		@Override
 		public void display(GLAutoDrawable drawable) {
-			GL2 gl = drawable.getGL().getGL2();
+			gl = drawable.getGL().getGL2();
 			gl.glClear(GL.GL_COLOR_BUFFER_BIT | GL.GL_DEPTH_BUFFER_BIT);//vycistenie obrazovky aj depth buffera
-			gl.glEnable(GL.GL_TEXTURE_2D); //musi to tu byt ked chcem textury
-			//gl.glLoadIdentity();//resetovanie pohladu
-			//gl.glTranslatef(0.0f, -20.0f, -250.0f);
+			// //musi to tu byt ked chcem textury
 			
-		  
-			//gl.glColor3f(1.0f,0.0f,0.0f); 
-			/*gl.glBindTexture(GL.GL_TEXTURE_2D, textBuff[0]);
-			gl.glBegin(GL2.GL_QUADS);                   // Draw A Quad
-				gl.glTexCoord2f(0.0f, 1.0f);
-				gl.glVertex3f(-200.0f, 200.0f, 0.0f);              // Top Left
-				gl.glTexCoord2f(1.0f, 1.0f);
-				gl.glVertex3f( 200.0f, 200.0f, 0.0f);              // Top Right
-				gl.glTexCoord2f(1.0f, 0.0f);
-				gl.glVertex3f( 200.0f,-200.0f, 0.0f);              // Bottom Right
-				gl.glTexCoord2f(0.0f, 0.0f);
-				gl.glVertex3f(-200.0f,-200.0f, 0.0f);              // Bottom Left
-	        gl.glEnd(); */
-	        
 			gl.glLoadIdentity(); //obsah sceny
 			
-			gl.glTranslatef(0.0f, 0.0f, -200.0f);
+			gl.glTranslatef(0.0f, 0.0f, (float) -50.0);
+			
+			
 			gl.glRotatef(angleY, 0.0f, 1.0f, 0.0f);
-			
-			
-			
+			gl.glShadeModel(GL2.GL_SMOOTH);
 			model.drawModel(gl);
 			
 			
 		    angleY = angleY + angleIncrease;
 		    
-		    
+		    	
+		    	//gl.glTranslatef(0.0f, 0.0f, 0.0f);
+		    	//gl.glPushAttrib(GL2.GL_LIGHTING_BIT);
+		    	
+			    //gl.glPopAttrib();
+			
 		    gl.glDisable(GL.GL_TEXTURE_2D);
 		    gl.glLoadIdentity();
 			gl.glPushAttrib(GL2.GL_CURRENT_BIT);
@@ -248,7 +226,7 @@ public class SimpleScene {
 			final float h = (float)width / (float)height;
 			//45-uhol do hlbky od osi x,y
 			//h - pomer stran; 0.1, 800.0 interval pre hlbku
-			glu.gluPerspective(45.0f, h, 0.1, 800.0);
+			glu.gluPerspective(45.0f, h, 0.1, 25000.0);
 
 			gl.glMatrixMode(GL2.GL_MODELVIEW);
 				
@@ -276,7 +254,16 @@ public class SimpleScene {
 				depth += 1.0f;
 			} else if(e.getKeyChar() == '-'){
 				depth -= 1.0f;
-			}
+			} /*else if(e.getKeyChar() == 'l'){
+				if(light == false) {
+					light = true; 
+				}
+				if(light == true){
+					//gl.glDisable(GL2.GL_LIGHT0);
+				    //gl.glDisable(GL2.GL_LIGHTING);
+					light = false;
+				}
+			}*/
 		}
 		
 		@Override
