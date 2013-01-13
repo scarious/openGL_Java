@@ -226,7 +226,7 @@ public class SimpleScene {
 			final float h = (float)width / (float)height;
 			//45-uhol do hlbky od osi x,y
 			//h - pomer stran; 0.1, 800.0 interval pre hlbku
-			glu.gluPerspective(45.0f, h, 0.1, 25000.0);
+			glu.gluPerspective(45.0f, h, 0.1, 500.0);
 
 			gl.glMatrixMode(GL2.GL_MODELVIEW);
 				
