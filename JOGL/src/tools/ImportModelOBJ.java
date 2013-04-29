@@ -1,5 +1,6 @@
 /*
  * Trieda pre import modelu vo formate *.OBJ
+ * Musi byt upraveny v Blenderi na trojuholnikovy model
  */
 package tools;
 
@@ -9,9 +10,11 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.nio.IntBuffer;
 import java.util.ArrayList;
 import java.util.StringTokenizer;
 
+import javax.media.opengl.GL;
 import javax.media.opengl.GL2;
 
 public class ImportModelOBJ implements ImportModel {
@@ -21,6 +24,9 @@ public class ImportModelOBJ implements ImportModel {
 	BufferedReader bufferedReader;
 	File fileModel;
 	float centerX, centerY, centerZ; //stred objektu (napr. kvoli otacaniu)
+	private int[] texBuf = new int[2];
+	
+	private tools.TextureReader.Texture texture = null;
 	
 	private enum ObjType {
 		VVT, VVTVN  //VVT - vrcholy + textury; VVTVN - vrcholy + textury + normaly
@@ -45,6 +51,22 @@ public class ImportModelOBJ implements ImportModel {
 	int vDataSize, vtDataSize, vnDataSize; //premenne na uchovanie velkosti jednotlivych zoznamov, sluzi len pre vypis
 	float maxX = -1, maxY = -1, maxZ = -1;
 	float minX = -1, minY = -1, minZ = -1;
+	
+	public ImportModelOBJ(File file) {
+		System.out.println("Importing model from file: " + file);
+		try {
+			fileModel = file;
+			fileInputStream = new FileInputStream(fileModel);
+			inputStreamReader = new InputStreamReader(fileInputStream);
+			bufferedReader = new BufferedReader(inputStreamReader);
+		} catch (FileNotFoundException e) {
+			System.out.println("File with model: " + file + "was not found!");
+			
+		}
+		System.out.println("File size: " + fileModel.length()/1024 + "KB");
+		readModelData();
+	}	
+	
 	public ImportModelOBJ(String location) {
 		System.out.println("Importing model from file: " + location);
 		try {
@@ -57,6 +79,37 @@ public class ImportModelOBJ implements ImportModel {
 			
 		}
 		System.out.println("File size: " + fileModel.length()/1024 + "KB");
+		readModelData();
+	}
+	
+	public ImportModelOBJ(String location, String texLocation, GL2 gl) {
+		System.out.println("Importing model from file: " + location);
+		try {
+			fileModel = new File(location);
+			fileInputStream = new FileInputStream(fileModel);
+			inputStreamReader = new InputStreamReader(fileInputStream);
+			bufferedReader = new BufferedReader(inputStreamReader);
+		} catch (FileNotFoundException e) {
+			System.out.println("File with model: " + location + "was not found!");
+			
+		}
+		texBuf[0] = -1;
+		System.out.println("File size: " + fileModel.length()/1024 + "KB");
+		try {
+        	texture = TextureReader.readTexture("res/Textures/HorseStatue.png");
+        } catch (IOException e) {
+            e.printStackTrace();
+            throw new RuntimeException(e);
+        }
+		
+       gl.glGenTextures(2, IntBuffer.wrap(texBuf)); //vytvorenie dvoch textur
+       
+       gl.glBindTexture(GL.GL_TEXTURE_2D, texBuf[0]);
+       gl.glTexImage2D(GL.GL_TEXTURE_2D, 0, GL.GL_RGB, texture .getWidth(), 
+    	   texture.getHeight(), 0, GL.GL_RGB, GL.GL_UNSIGNED_BYTE, texture.getPixels());
+  
+       gl.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MIN_FILTER, GL.GL_LINEAR);
+       gl.glTexParameteri(GL.GL_TEXTURE_2D,GL.GL_TEXTURE_MAG_FILTER,GL.GL_LINEAR);
 		readModelData();
 	}
 	
@@ -126,10 +179,10 @@ public class ImportModelOBJ implements ImportModel {
 		System.out.println("Vertex (v) data count: " + vDataSize);
 		System.out.println("Texture vertex (vt) data count: " + vtDataSize);
 		System.out.println("Normals vertex (vn) data count: " + vnDataSize);
+		
 		System.out.println("-------- IMPORT FINISHED --------");
 		System.out.println("Max X: " + maxX + " Max Y: " + maxY + " Max Z: " + maxZ);
 		System.out.println("Min X: " + minX + " Min Y: " + minY + " Min Z: " + minZ);
-		
 		calculateFinalData();
 	}
 	
@@ -143,9 +196,18 @@ public class ImportModelOBJ implements ImportModel {
 		} else if(vDataSize > 0 && vnDataSize == 0 && vtDataSize >0){		//analyze faces data with pattern f v1/vt1 v2/vt2 v3/vt3 ...
 			System.out.println("Faces pattern: f v1/vt1 v2/vt2 v3/vt3 ...");
 			typeOfObject = ObjType.VVT;
-			analyzeFacesforVVT();
-			assemblyFinalTrianglesData(true);
-			assemblyFinalQuadsData(true);
+			//assemblyFinalTrianglesData(true);
+			//assemblyFinalQuadsData(true);
+			if(vnDataSize == 0){
+				System.out.println("Computing missing normals...");
+				computeNormals();
+				typeOfObject = ObjType.VVTVN;
+				vnDataSize = vnData.size();
+				System.out.println("Normals vertex (vn) data count: " + vnDataSize);
+			}
+			analyzeFacesforVVT(vnData);
+			assemblyFinalTrianglesDataWithNormals();
+			assemblyFinalQuadsDataWithNormals();
 		} else if(vDataSize > 0 && vnDataSize > 0 && vtDataSize ==0){	//analyze faces data with pattern f v1//vn1 v2//vn2 v3//vn3 ...
 			System.out.println("Faces pattern: f v1//vn1 v2//vn2 v3//vn3 ...");
 			System.out.println("NOT IMPLEMENTED!");
@@ -157,12 +219,62 @@ public class ImportModelOBJ implements ImportModel {
 		getOptimalDepth();
 	}
 	
+	private void computeNormals(){
+		float[] vector1 = new float[3];
+		float[] vector2 = new float[3];
+		float[] normal = new float[3];
+		double lenghtOfVector;
+		float[] normalized = new float[3];
+		float[] normalizedB = new float[3];
+		for(int i = 0; i<=vDataSize-3; i=i+3){
+			//komplanarny vektor
+			vector1[0] = (vData.get(i+1))[0] - (vData.get(i))[0];
+			vector1[1] = (vData.get(i+1))[1] - (vData.get(i))[1];
+			vector1[2] = (vData.get(i+1))[2] - (vData.get(i))[2];
+			
+			vector2[0] = (vData.get(i+2))[0] - (vData.get(i))[0];
+			vector2[1] = (vData.get(i+2))[1] - (vData.get(i))[1];
+			vector2[2] = (vData.get(i+2))[2] - (vData.get(i))[2];		
+					
+			//normal vektor			
+			normal[0] = (vector1[1] * vector2[2])-(vector1[2] * vector2[1]);
+			normal[1] = (vector1[2] * vector2[0])-(vector1[0] * vector2[2]);
+			normal[2] = (vector1[0] * vector2[1])-(vector1[1] * vector2[0]);
+			
+			//dlzka vektora
+			lenghtOfVector = Math.sqrt((normal[0] * normal[0])+
+								(normal[1] * normal[1])+
+								(normal[2] * normal[2]));
+			//konecny vypocet
+			normalized[0] = (float) (normal[0]/lenghtOfVector);
+			normalized[1] = (float) (normal[1]/lenghtOfVector);
+			normalized[2] = (float) (normal[2]/lenghtOfVector);
+			
+			normalizedB = normalized;
+			vnData.add(normalized);
+			vnData.add(normalized);
+			vnData.add(normalized);
+			
+			//nulovanie prem.
+			vector1 = new float[3];
+			vector2 = new float[3];
+			normal = new float[3];
+			normalized = new float[3];
+			lenghtOfVector = 0;
+			//i += 3;
+			
+			
+		}
+		vnData.add(normalizedB);
+	}
+	
+	
 	private void analyzeFacesforVVTVN(){
-System.out.println("Analyzing faces data...");
+		System.out.println("Analyzing faces data...");
 		float[] xyT = new float[4];
 		float[] xyz = new float[4];
 		float[] xyzN = new float[4];
-		int riadok = 0;
+		//int riadok = 0;
 		for(String line: fDataRAW){ //prechadzam riadok po riadku data pre faces zo obj suboru
 			//System.out.println(riadok + ": " + line);
 			//if(line.contains("//")){System.out.println(riadok + ": " + line);};
@@ -172,16 +284,19 @@ System.out.println("Analyzing faces data...");
 			int numberOfTokens = tempTokenizer.countTokens();
 			if(numberOfTokens == 3 && !line.contains("//")){
 					word = tempTokenizer.nextToken(); // V1/VT1
+					System.out.println(word);
 					xyz[0] = Float.valueOf(word.substring(0, word.indexOf("/")));
 					xyT[0] = Float.valueOf(word.substring(word.indexOf("/")+1, word.lastIndexOf("/")));
 					xyzN[0] = Float.valueOf(word.substring(word.lastIndexOf("/")+1));
 					
 					word = tempTokenizer.nextToken(); // V2/VT2
+					System.out.println(word);
 					xyz[1] = Float.valueOf(word.substring(0, word.indexOf("/")));
 					xyT[1] = Float.valueOf(word.substring(word.indexOf("/")+1, word.lastIndexOf("/")));
 					xyzN[1] = Float.valueOf(word.substring(word.lastIndexOf("/")+1));
 					
 					word = tempTokenizer.nextToken(); // V3/VT3
+					System.out.println(word);
 					xyz[2] = Float.valueOf(word.substring(0, word.indexOf("/")));
 					xyT[2] = Float.valueOf(word.substring(word.indexOf("/")+1, word.lastIndexOf("/")));
 					xyzN[2] = Float.valueOf(word.substring(word.lastIndexOf("/")+1));
@@ -214,7 +329,7 @@ System.out.println("Analyzing faces data...");
 					quadsFacesList.add(xyzN);
 					quadsFacesList.add(xyz);
 			}
-			riadok++;
+			//riadok++;
 			xyz = new float[4];
 			xyzN = new float[4];
 			xyT = new float[4];
@@ -223,11 +338,19 @@ System.out.println("Analyzing faces data...");
 				+ "Quad data: " + quadsFacesList.size());
 	}
 	
-	private void analyzeFacesforVVT(){
+	private void analyzeFacesforVVT(ArrayList<float[]> vnData){
 		System.out.println("Analyzing faces data...");
 		
 		float[] xyz = new float[4];
 		float[] xyT = new float[4];
+		boolean addNormalToList = false;
+		float position = 0;
+		
+		if(vnData.size() > 0){
+			addNormalToList = true;
+			System.out.println("Auto VVTVN completion");
+		}
+		
 		System.out.println("f" + fDataRAW.size());
 		for(String line: fDataRAW){ //prechadzam riadok po riadku data pre faces zo obj suboru
 			StringTokenizer tempTokenizer = new StringTokenizer(line);
@@ -248,7 +371,9 @@ System.out.println("Analyzing faces data...");
 					xyT[2] = Float.valueOf(word.substring(word.indexOf("/")+1));
 					
 					triangleFacesList.add(xyT);
+					if(addNormalToList) {triangleFacesList.add(xyz);}
 					triangleFacesList.add(xyz);	
+					
 			} else if(numberOfTokens == 4){
 					word = tempTokenizer.nextToken();
 					xyz[0] = Float.valueOf(word.substring(0, word.indexOf("/")));
@@ -267,6 +392,7 @@ System.out.println("Analyzing faces data...");
 					xyT[3] = Float.valueOf(word.substring(word.indexOf("/")+1));
 					
 					quadsFacesList.add(xyT);
+					if(addNormalToList) {triangleFacesList.add(xyz);}
 					quadsFacesList.add(xyz);
 			}
 			
@@ -280,6 +406,9 @@ System.out.println("Analyzing faces data...");
 	@Override
 	public void drawModel(GL2 gl){
 		
+		if(texBuf[0] != -1){
+			gl.glBindTexture(GL.GL_TEXTURE_2D, texBuf[0]);
+		}
 		float[] f = new float[3];
 		gl.glTranslatef(-centerX, -centerY, -centerZ);
 		switch(typeOfObject){
@@ -350,13 +479,13 @@ System.out.println("Analyzing faces data...");
 			tempVN = triangleFacesList.get(++i);
 			tempV = triangleFacesList.get(++i);
 			finalTrianglesData.add(vtData.get((int) (tempVT[0]-1.0)));
-			finalTrianglesData.add(vnData.get((int) (tempVT[0]-1.0)));
+			finalTrianglesData.add(vnData.get((int) (tempVN[0]-1.0)));
 			finalTrianglesData.add(vData.get((int) (tempV[0]-1.0)));
 			finalTrianglesData.add(vtData.get((int) (tempVT[1]-1.0)));
-			finalTrianglesData.add(vnData.get((int) (tempVT[1]-1.0)));
+			finalTrianglesData.add(vnData.get((int) (tempVN[1]-1.0)));
 			finalTrianglesData.add(vData.get((int) (tempV[1]-1.0)));
 			finalTrianglesData.add(vtData.get((int) (tempVT[2]-1.0)));
-			finalTrianglesData.add(vnData.get((int) (tempVT[2]-1.0)));
+			finalTrianglesData.add(vnData.get((int) (tempVN[2]-1.0)));
 			finalTrianglesData.add(vData.get((int) (tempV[2]-1.0)));	
 			tempVT = new float[3];
 			tempVN  = new float[3];
@@ -393,7 +522,7 @@ System.out.println("Analyzing faces data...");
 	}
 		
 	
-	private void assemblyFinalTrianglesData(boolean withTextureData){
+	/*private void assemblyFinalTrianglesData(boolean withTextureData){
 		float[] tempV  = new float[3];
 		float[] tempVT  = new float[3];
 		if(withTextureData){
@@ -441,7 +570,8 @@ System.out.println("Analyzing faces data...");
 			tempVT = new float[4];
 			tempV = new float[4];
 		}
-	}
+	}*/
+	
 	/*
 	 * Metoda pre zistenie max a min pozicii v modeli - pre neskorsie zarovnanie na stred obrazovky.
 	 */

@@ -17,6 +17,7 @@ public class TextureReader {
 
     public static Texture readTexture(String filename, boolean storeAlphaChannel) throws IOException {
         BufferedImage bufferedImage;
+        System.out.println("TextureReader - Reading file: " + filename);
         bufferedImage = ImageIO.read(new File(filename));
         return readPixels(bufferedImage, storeAlphaChannel);
     }
